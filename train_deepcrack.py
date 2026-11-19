@@ -4,6 +4,7 @@
     python train_deepcrack.py train    --data DATA --out runs/deepcrack_s0 [--seed 0]
     python train_deepcrack.py evaluate --checkpoint runs/deepcrack_s0/best.pt --data DATA --split test
     python train_deepcrack.py predict  --checkpoint runs/deepcrack_s0/best.pt --images photos/ --out predictions/
+    python train_deepcrack.py summarize runs/new     # seeds in runs/new/seed_*: mean +- std, and the run to keep
 
 Dataset (DATA), either layout works (image and mask files are paired by name; masks are crack > 0):
     DATA/train/images  DATA/train/masks  DATA/val/...  [DATA/test/...]       ready-made split, or
@@ -759,6 +760,63 @@ def predict(args: argparse.Namespace) -> int:
     return 0
 
 
+# =========================================================================== #
+# Summary over seeds
+# =========================================================================== #
+def summarize(args: argparse.Namespace) -> int:
+    """Per-seed metrics of the finished runs in a folder, their mean +- std, and the run to keep (best val IoU)."""
+    root = Path(args.runs)
+    runs = sorted(path.parent for path in root.glob("*/FINISHED") if (path.parent / "val_metrics.json").exists())
+    if not runs:
+        raise SystemExit(f"No finished runs (*/FINISHED with val_metrics.json) under {root}")
+    rows = []
+    for run in runs:
+        row: dict[str, Any] = {"run": run.name}
+        for split in ("val", "test"):
+            path = run / f"{split}_metrics.json"
+            if not path.exists():
+                continue
+            result = json.loads(path.read_text(encoding="utf-8"))
+            row.update(seed=result.get("seed"), best_epoch=result.get("best_epoch"), threshold=result["threshold"])
+            row.update({f"{split}_{key}": value for key, value in result["metrics"].items()})
+        rows.append(row)
+    columns = [c for c in rows[0] if c.startswith(("val_", "test_"))]
+    columns = [c for c in columns if all(c in row for row in rows)]
+    shown = [c for c in columns if c.split("_", 1)[1] in ("iou", "f1", "precision", "recall", "average_precision")
+             or c.split("_", 1)[1].startswith("tol_f1_")]
+
+    def short(column: str) -> str:
+        return column.replace("average_precision", "AP").replace("precision", "P").replace("recall", "R") \
+            .replace("tol_f1_", "F1@")
+
+    print(f"{'run':<12} {'seed':>4} {'epoch':>5} {'thr':>6} " + " ".join(f"{short(c):>10}" for c in shown))
+    for row in rows:
+        print(f"{row['run']:<12} {row.get('seed', ''):>4} {row.get('best_epoch', ''):>5} {row['threshold']:>6.3f} "
+              + " ".join(f"{row[c]:>10.4f}" for c in shown))
+    summary: dict[str, Any] = {"runs": rows, "n": len(rows), "mean": {}, "std": {}}
+    for column in columns:
+        values = np.array([row[column] for row in rows], dtype=np.float64)
+        summary["mean"][column] = float(values.mean())
+        summary["std"][column] = float(values.std(ddof=1)) if len(values) > 1 else float("nan")
+    print(f"{'mean':<12} {'':>4} {'':>5} {'':>6} " + " ".join(f"{summary['mean'][c]:>10.4f}" for c in shown))
+    print(f"{'std':<12} {'':>4} {'':>5} {'':>6} " + " ".join(f"{summary['std'][c]:>10.4f}" for c in shown))
+    keep = max(rows, key=lambda row: row["val_iou"])
+    summary["keep"] = keep["run"]
+    print(f"\nkeep: {root / keep['run'] / 'best.pt'} (best val IoU {keep['val_iou']:.4f}; chosen on val, not test)")
+    if "test_iou" in summary["mean"] and len(rows) > 1:
+        print(f"report: test IoU {summary['mean']['test_iou']:.4f} +- {summary['std']['test_iou']:.4f} over {len(rows)} seeds")
+    (root / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    with (root / "summary.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["run", "seed", "best_epoch", "threshold"] + columns,
+                                extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+        for name in ("mean", "std"):
+            writer.writerow({"run": name, **summary[name]})
+    print(f"[done] {root / 'summary.json'}, {root / 'summary.csv'}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -796,6 +854,10 @@ def main() -> int:
     p.add_argument("--threshold", type=float, help="default: the one stored in the checkpoint")
     p.add_argument("--overlay", action="store_true", help="also save the cracks drawn in red over the image")
     p.set_defaults(handler=predict)
+
+    p = commands.add_parser("summarize", help="mean +- std over the seeds (run folders) in a folder, and the run to keep")
+    p.add_argument("runs", help="folder with one run folder per seed, e.g. runs/new (seed_0, seed_1, seed_2)")
+    p.set_defaults(handler=summarize)
 
     args = parser.parse_args()
     return args.handler(args)

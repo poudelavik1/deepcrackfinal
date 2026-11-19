@@ -69,6 +69,7 @@ python train_deepcrack.py train    --data DATA --out RUN [--seed 0] [--recipe tu
                                    [--epochs 80] [--batch-size 16] [--lr 1e-4] [--optimizer radam] [--crop-size 256]
 python train_deepcrack.py evaluate --checkpoint RUN/best.pt --data DATA --split test [--threshold T] [--save m.json]
 python train_deepcrack.py predict  --checkpoint RUN/best.pt --images FOLDER_OR_IMAGE --out OUT [--overlay]
+python train_deepcrack.py summarize RUNS        # RUNS/seed_0, seed_1, ...: mean ± std, and the run to keep
 ```
 
 - A run folder that has `FINISHED` is skipped (`--force` retrains it); an interrupted run resumes
@@ -76,7 +77,8 @@ python train_deepcrack.py predict  --checkpoint RUN/best.pt --images FOLDER_OR_I
 - Images larger than 1024 px are predicted with a 512 px sliding window (stride 448) and the
   overlaps are averaged, so full drone photos can be passed to `predict` directly.
 - Seeds change the result by about ±0.002 val IoU. For numbers to report, train seeds 0, 1 and 2
-  and give the mean ± std.
+  and give the mean ± std: `summarize` prints them per split, writes `summary.json` / `summary.csv`,
+  and names the run to keep (best val IoU, so the choice never looks at test).
 
 ## Outputs of `train`
 
@@ -95,14 +97,20 @@ predicted pixel as correct within 2 px of a labelled one and vice versa.
 
 ```bash
 git clone https://github.com/poudelavik1/deepcrackfinal.git ~/deepcrackfinal && cd ~/deepcrackfinal
-DATA=~/new_dataset OUT=~/deepcrack_runs/new_s0 SEED=0 sbatch slurm/train.sbatch
+DATA=~/new_dataset OUT=~/deepcrack_runs/new_s0 SEED=0 sbatch slurm/train.sbatch    # one seed
+DATA=~/new_dataset OUT=~/deepcrack_runs/new sbatch --array=0-2 slurm/train.sbatch    # seeds 0 1 2
 ```
+
+With `--array`, task n trains seed n in `OUT/seed_n` and then runs `summarize OUT`, so after the
+last seed `OUT/summary.csv` holds the mean ± std. On an account limited to one running job, the
+seeds simply run one after another.
 
 The job puts the conda environment on `PATH` (compute nodes have no conda) and reads the
 VGG-16-BN ImageNet weights from `~/weights_cache/torch`, which the benchmark already filled. On a
 new account, download them once on the login node:
 `TORCH_HOME=~/weights_cache/torch python -c "import torchvision; torchvision.models.vgg16_bn(weights='DEFAULT')"`.
-A full run (13.6k tiles of 256 px, 80 epochs) takes about 1.3 h on an RTX A6000.
+A full run (13.6k tiles of 256 px, 80 epochs) takes about 1.3 h on an RTX A6000; time grows with
+the number of training tiles (about 1.9 h for 19.6k).
 
 ## Using a checkpoint from the benchmark
 
