@@ -1,0 +1,12 @@
+# Code only: never commit data, weights or results.
+runs/
+predictions/
+data/
+*.pt
+*.pth
+*.out
+__pycache__/
+*.py[cod]
+.venv/
+.vscode/
+.idea/

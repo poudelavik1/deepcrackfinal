@@ -1,0 +1,7 @@
+# Line endings: scripts are written on Windows and run on Linux.
+* text=auto
+*.py text eol=lf
+*.sh text eol=lf
+*.sbatch text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
