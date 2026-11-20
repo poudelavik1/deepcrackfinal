@@ -39,28 +39,39 @@ set). The split is saved as `split.json` in the run folder and reused on every r
 
 ## The recipe, and the evidence for each choice
 
-Values are pooled val IoU at the val-chosen threshold, single-seed screening (stage 1, 53 runs),
-against the benchmark recipe (reference: 0.5520 ± 0.0021 over three seeds). A change counts only
-beyond ±0.003, about the seed-to-seed spread.
+The ablation ran in three stages on the 13 Nov 2026 split (13.6k training tiles), always against
+the benchmark recipe (reference: val IoU 0.5520 ± 0.0021 over seeds 0 1 2). Values are pooled val IoU
+at the val-chosen threshold. Stage 1 screened 56 single-seed changes (a change counts only beyond
+±0.003, about the seed spread); stage 3 retrained the best ones with seeds 1 and 2.
 
-| Setting | Value | Evidence (Δ val IoU) |
+| Recipe, seeds 0 1 2 (stage 3) | Val IoU | Δ vs reference | Per seed |
+|---|---|---|---|
+| **RAdam lr 1e-4 (final recipe)** | **0.5540 ± 0.0027** | **+0.0020** | +0.0036, +0.0016, +0.0009; Wilcoxon per tile p = 0.003 |
+| AdamW lr 1e-4 (control) | 0.5540 ± 0.0019 | +0.0020 | |
+| AdamW 3e-4, no HSV jitter | 0.5539 ± 0.0024 | +0.0019 | |
+| Reference: AdamW lr 3e-4 (benchmark) | 0.5520 ± 0.0021 | | |
+
+What this means: the gain is small (+0.4 % relative) but consistent, and it comes from the **lower
+learning rate**, not from RAdam: AdamW at 1e-4 is just as good. RAdam 1e-4 is kept because it was
+the pre-registered rule (best three-seed mean); `--optimizer adamw` gives the same result.
+Removing HSV jitter helps by the same amount on its own, but not on top of the lower lr
+(RAdam 1e-4 + no HSV, seed 0: 0.5552, below both parts), so HSV jitter stays.
+
+| Setting | Value | Evidence (stage 1, Δ val IoU, seed 0) |
 |---|---|---|
 | Model | DeepCrack: VGG-16-BN encoder (ImageNet weights), 5 side outputs, 1×1 fusion | The model of this ablation (the crack-specific baseline of the thesis benchmark) |
-| Optimizer | **RAdam, lr 1e-4**, weight decay 1e-4 | Best of 27 optimizer/lr settings: **+0.0047**. Same optimizer at 3e-4: −0.012; at 1e-3: −0.053 |
-| Learning rate | 1e-4, 2 warm-up epochs, cosine to 1 % | The lr matters more than the optimizer: every Adam-type optimizer is best at 1e-4 (0.552–0.557) and collapses at 1e-3 (~0.50) |
+| Optimizer | **RAdam, lr 1e-4**, weight decay 1e-4 | Best of 30 optimizer/lr settings (+0.0047 with one seed, +0.0020 over three). RAdam at 3e-5: −0.0010; at 3e-4: −0.012; at 1e-3: −0.053 |
+| Learning rate | 1e-4, 2 warm-up epochs, cosine to 1 % | The lr matters more than the optimizer: every Adam-type optimizer is best at 1e-4 (Adamax: 3e-4), 0.552–0.557, and collapses at 1e-3 (~0.50); 3e-5 is already too low |
 | Crop | 256 × 256, containing a crack when the tile has one | Uniform random crops instead: **−0.0285**, the largest effect found |
 | Geometric augmentation | flips, 90° rotations, mild affine (±15°, scale 0.9–1.1) | No 90° rotations: −0.0072 (overfits, stops at epoch 61). No augmentation at all: −0.0069 (stops at epoch 43) |
-| Photometric augmentation | brightness/contrast ±0.15, light blur/noise; **no HSV jitter** | Removing HSV jitter: **+0.0043**, the only augmentation gain. Stronger brightness/contrast (±0.3): −0.0071 |
+| Photometric augmentation | brightness/contrast ±0.15, HSV jitter (p 0.3), light blur/noise | Stronger brightness/contrast (±0.3): −0.0071. No HSV: see above |
 | Added augmentations | none | Elastic, grid distortion, perspective, CLAHE, gamma, shadow, grayscale, sharpen, motion blur, downscale, sensor noise, JPEG, coarse dropout, CutMix: all within ±0.003 |
 | Loss | BCE + soft Dice on the fused output | Benchmark protocol |
 | Stability | EMA of weights (0.999), mixed precision, gradient clipping 1.0 | Benchmark protocol v2 (removed the ±0.3 epoch-to-epoch swings of v1) |
 | Length | 80 epochs, early stop after 20 without gain, not before epoch 30 | Most runs used the full 80 epochs |
 | Threshold | best pooled F1 on val, stored in `best.pt` | Used unchanged for test and predictions |
 
-**Status.** RAdam 1e-4 and "no HSV" are each single-seed results, and their combination is being
-confirmed over three seeds (ablation stages 2 and 3, plus a lower-lr check for RAdam, Adamax and
-AdamW). If that confirmation changes the recipe, edit `RECIPES["tuned"]` at the top of the script.
-`--recipe benchmark` runs the reference recipe (AdamW 3e-4, with HSV jitter).
+`--recipe benchmark` runs the reference recipe (AdamW 3e-4).
 
 ## Commands
 

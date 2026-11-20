@@ -10,25 +10,25 @@ Dataset (DATA), either layout works (image and mask files are paired by name; ma
     DATA/train/images  DATA/train/masks  DATA/val/...  [DATA/test/...]       ready-made split, or
     DATA/images        DATA/masks                                            split 80/10/10 here, by source image
 
-The training recipe is the result of the DeepCrack ablation in the thesis benchmark (53 screening runs,
-val IoU at the val-chosen threshold, reference = benchmark recipe, 0.5520 +- 0.0021 over 3 seeds):
+The training recipe is the result of the DeepCrack ablation in the thesis benchmark (13 Nov 2026 split;
+pooled val IoU at the val-chosen threshold; reference = benchmark recipe, 0.5520 +- 0.0021 over seeds 0 1 2):
 
   model         DeepCrack (Liu et al. 2019): VGG-16-BN encoder (ImageNet weights), 5 side outputs fused by 1x1 conv
-  optimizer     RAdam, lr 1e-4, weight decay 1e-4         best of 9 optimizers x 3 lrs: +0.0047 (AdamW 3e-4 = reference;
-                                                            Adam-family at 1e-3: about -0.05)
+  optimizer     RAdam, lr 1e-4, weight decay 1e-4         final, seeds 0 1 2: 0.5540 +- 0.0027 (+0.0020, better on every
+                                                            seed; Wilcoxon per tile p = 0.003). AdamW 1e-4 is as good
+                                                            (0.5540): the gain is the lower lr. Adam-family at 1e-3: -0.05
   schedule      2 warm-up epochs, cosine to 1 % of lr, 80 epochs, early stop after 20 epochs without gain (not before 30)
   batch         16 random 256 x 256 crops, with a crack in the crop when the tile has one
                                                             uniform random crops instead: -0.0285 (largest effect found)
-  augmentation  flips, 90-degree rotations, mild affine, brightness/contrast, light blur/noise
+  augmentation  flips, 90-degree rotations, mild affine, brightness/contrast, HSV jitter (p 0.3), light blur/noise
                                                             no 90-degree rotations: -0.0072; no augmentation: -0.0069
-                NO hue/saturation/value jitter              removing it: +0.0043 (the only augmentation gain)
+                                                            no HSV alone: +0.0019 over 3 seeds, but not on top of lr 1e-4
                 (14 added augmentations, e.g. CLAHE, elastic, CutMix, motion blur: all within seed noise)
   loss          BCE + soft Dice on the fused output
   stability     EMA of the weights (0.999, validated and saved), mixed precision, gradient clipping 1.0
   threshold     chosen on val (best pooled F1), stored in best.pt, used for test and predictions
 
-Status: from the single-seed screening (stage 1). The combination is being confirmed over three seeds;
-`--recipe benchmark` gives the reference recipe (AdamW 3e-4, with HSV jitter).
+`--recipe benchmark` gives the reference recipe (AdamW 3e-4).
 
 Outputs of `train` in --out: best.pt (EMA weights + threshold), last.pt (resume), history.csv, recipe.json,
 split.json (when the split was made here), val_metrics.json, test_metrics.json (if a test split exists), FINISHED.
@@ -87,7 +87,7 @@ class Recipe:
     patience: int = 20
     min_epochs: int = 30
     amp: bool = True
-    hsv_p: float = 0.0                # hue/saturation/value jitter (0.3 in the benchmark recipe)
+    hsv_p: float = 0.3                # hue/saturation/value jitter, as in the benchmark (0 helps alone, not with lr 1e-4)
     eval_max_side: int = 1024         # larger images are predicted with a sliding window
     eval_window: int = 512
     eval_stride: int = 448
@@ -96,7 +96,7 @@ class Recipe:
 
 RECIPES = {
     "tuned": Recipe(),
-    "benchmark": Recipe(name="benchmark", optimizer="adamw", lr=3e-4, hsv_p=0.3),
+    "benchmark": Recipe(name="benchmark", optimizer="adamw", lr=3e-4),
 }
 
 
