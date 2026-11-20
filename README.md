@@ -99,6 +99,21 @@ lower learning rate helps a little but consistently.
 | val | 0.5430 ± 0.0051 | 0.7039 | 0.7163 | 0.6919 | 0.7980 | 0.7350 |
 | **test** | **0.5733 ± 0.0013** | **0.7288** | 0.7413 | 0.7168 | 0.8306 | 0.7728 |
 
+**Combining models or flipped images does not pay off.** `ensemble` (job on the 16 Nov split,
+each option with its own val-chosen threshold, then only the val winner on test):
+
+| Option | Passes per image | Val IoU | Val AP |
+|---|---|---|---|
+| seed 0 alone | 1 | 0.5488 | 0.7416 |
+| seed 0 + flips (horizontal, vertical) | 3 | **0.5512** | 0.7531 |
+| 3 seeds averaged | 3 | 0.5501 | 0.7522 |
+| 3 seeds + flips | 9 | 0.5492 | 0.7551 |
+
+Val chose seed 0 + flips; on test it gives IoU 0.5745 (F1 0.7297, AP 0.7788) against 0.5739 (F1
+0.7292, AP 0.7724) for seed 0 alone: **+0.0006 IoU for 3x the prediction time**. The single model
+stays the final model; `predict --ensemble <runs>/ensemble.json` gives the flipped version if the
+small AP gain is wanted.
+
 The model to use is **seed 0** (best val IoU, 0.5488; best epoch 79, threshold 0.518; test IoU
 0.5739). It was chosen on val, never on test. The weights (`best.pt`, about 56 MB each) are kept
 outside this repository. Test numbers of the two splits are not comparable: they are different
