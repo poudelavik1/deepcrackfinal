@@ -1,0 +1,14 @@
+\begin{table}
+\caption{deepcrack: final candidates over seeds [0, 1, 2] (val)}
+\label{tab:ablation_deepcrack_final}
+\begin{tabular}{lrlrrrrr}
+\toprule
+variant & n\_seeds & val\_iou & delta\_iou & val\_f1 & tol\_f1\_2 & val\_precision & val\_recall \\
+\midrule
+opt\_radam\_lr1e-4 & 3 & 0.5540 $\pm$ 0.0027 & 0.0020 & 0.7130 & 0.7821 & 0.7521 & 0.6779 \\
+opt\_adamw\_lr1e-4 & 3 & 0.5540 $\pm$ 0.0019 & 0.0020 & 0.7130 & 0.7822 & 0.7535 & 0.6766 \\
+aug\_no\_hsv & 3 & 0.5539 $\pm$ 0.0024 & 0.0019 & 0.7129 & 0.7825 & 0.7514 & 0.6782 \\
+ref & 3 & 0.5520 $\pm$ 0.0021 & 0.0000 & 0.7113 & 0.7800 & 0.7506 & 0.6760 \\
+\bottomrule
+\end{tabular}
+\end{table}

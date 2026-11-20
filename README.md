@@ -73,6 +73,37 @@ Removing HSV jitter helps by the same amount on its own, but not on top of the l
 
 `--recipe benchmark` runs the reference recipe (AdamW 3e-4).
 
+## Final results
+
+Everything below is in [`results/`](results): the recipe as JSON ([`final_recipe.json`](results/final_recipe.json)),
+the ablation's winning config in the benchmark's format ([`ablation/FINAL.yaml`](results/ablation/FINAL.yaml)), all
+ablation tables (CSV and LaTeX), the full report, the two figures, and the per-seed metrics and
+training histories of the final model.
+
+**Ablation test set** (13 Nov 2026 split, used once, after the recipe was fixed on val; seeds 0 1 2,
+threshold chosen on val):
+
+| Recipe | Test IoU | F1 | Precision | Recall | F1 @ 2 px | AP |
+|---|---|---|---|---|---|---|
+| **RAdam lr 1e-4 (final)** | **0.5455 ± 0.0098** | 0.7059 | 0.7110 | 0.7012 | 0.7755 | 0.7331 |
+| Benchmark (AdamW lr 3e-4) | 0.5360 ± 0.0085 | 0.6979 | 0.6991 | 0.6969 | 0.7668 | 0.7219 |
+
+The final recipe is better on test by **+0.0095 IoU**, on every seed (+0.0085, +0.0129, +0.0073;
+Wilcoxon on per-tile test IoU p = 0.0003). That is more than its val gain (+0.0020); both say the
+lower learning rate helps a little but consistently.
+
+**Final model** (this script, 16 Nov 2026 split: 19,589 / 2,449 / 2,448 tiles, seeds 0 1 2):
+
+| Split | IoU | F1 | Precision | Recall | F1 @ 2 px | AP |
+|---|---|---|---|---|---|---|
+| val | 0.5430 ± 0.0051 | 0.7039 | 0.7163 | 0.6919 | 0.7980 | 0.7350 |
+| **test** | **0.5733 ± 0.0013** | **0.7288** | 0.7413 | 0.7168 | 0.8306 | 0.7728 |
+
+The model to use is **seed 0** (best val IoU, 0.5488; best epoch 79, threshold 0.518; test IoU
+0.5739). It was chosen on val, never on test. The weights (`best.pt`, about 56 MB each) are kept
+outside this repository. Test numbers of the two splits are not comparable: they are different
+tiles.
+
 ## Commands
 
 ```bash

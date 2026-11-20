@@ -1,0 +1,3 @@
+variant,n_seeds,test_iou,test_iou_std,test_f1,tol_f1_2,test_precision,test_recall,test_ap
+opt_radam_lr1e-4,3,0.5455,0.0098,0.7059,0.7755,0.711,0.7012,0.7331
+ref,3,0.536,0.0085,0.6979,0.7668,0.6991,0.6969,0.7219

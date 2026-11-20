@@ -28,7 +28,9 @@ pooled val IoU at the val-chosen threshold; reference = benchmark recipe, 0.5520
   stability     EMA of the weights (0.999, validated and saved), mixed precision, gradient clipping 1.0
   threshold     chosen on val (best pooled F1), stored in best.pt, used for test and predictions
 
-`--recipe benchmark` gives the reference recipe (AdamW 3e-4).
+`--recipe benchmark` gives the reference recipe (AdamW 3e-4). Ablation test set (once): final 0.5455 +- 0.0098 vs
+benchmark 0.5360 +- 0.0085 IoU (+0.0095, every seed). Final model on the 16 Nov 2026 split, seeds 0 1 2: test IoU
+0.5733 +- 0.0013, F1 0.7288 (results/ has every table, the recipe as JSON and the per-seed metrics).
 
 Outputs of `train` in --out: best.pt (EMA weights + threshold), last.pt (resume), history.csv, recipe.json,
 split.json (when the split was made here), val_metrics.json, test_metrics.json (if a test split exists), FINISHED.

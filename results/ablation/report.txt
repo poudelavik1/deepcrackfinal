@@ -1,0 +1,78 @@
+Ablation of deepcrack (deepcrack.yaml) - validation only, protocol 'ablation_deepcrack'
+Metric: pooled val IoU at the threshold with the best pooled F1 on val.
+
+Reference (benchmark protocol): 0.5520 ± 0.0021 (3 seeds). Margin for a positive change: 0.0030.
+Stage 1: 56/56 runs done.
+
+Optimizers (seed 0, delta vs reference mean):
+  AdamW            lr 3e-5: 0.5489 (-0.0031) | lr 1e-4: 0.5542 (+0.0022) | lr 3e-4: 0.5520 (+0.0000) | lr 1e-3: 0.5465 (-0.0055)
+  Adam             lr 1e-4: 0.5516 (-0.0004) | lr 3e-4: 0.5448 (-0.0072) | lr 1e-3: 0.4967 (-0.0553)
+  NAdam            lr 1e-4: 0.5529 (+0.0009) | lr 3e-4: 0.5440 (-0.0080) | lr 1e-3: 0.5016 (-0.0504)
+  RAdam            lr 3e-5: 0.5510 (-0.0010) | lr 1e-4: 0.5567 (+0.0047) | lr 3e-4: 0.5401 (-0.0120) | lr 1e-3: 0.4994 (-0.0526)
+  Adamax           lr 1e-4: 0.5511 (-0.0009) | lr 3e-4: 0.5553 (+0.0033) | lr 1e-3: 0.5449 (-0.0071) | lr 3e-3: 0.5185 (-0.0335)
+  RMSprop          lr 3e-5: 0.5549 (+0.0029) | lr 1e-4: 0.5556 (+0.0036) | lr 3e-4: 0.5384 (-0.0136)
+  Adagrad          lr 3e-3: 0.5500 (-0.0020) | lr 1e-2: 0.5409 (-0.0111) | lr 3e-2: 0.5119 (-0.0401)
+  SGD (Nesterov)   lr 3e-3: 0.5354 (-0.0166) | lr 1e-2: 0.5475 (-0.0045) | lr 3e-2: 0.5523 (+0.0003)
+  Lion             lr 3e-5: 0.5495 (-0.0025) | lr 1e-4: 0.5399 (-0.0121) | lr 3e-4: 0.5209 (-0.0311)
+  -> RAdam, lr 1e-4 (+0.0047 over the reference)
+  note: Adam: best at the lowest lr of the grid (1e-4); its optimum may lie outside the grid
+  note: NAdam: best at the lowest lr of the grid (1e-4); its optimum may lie outside the grid
+  note: Adagrad: best at the lowest lr of the grid (3e-3); its optimum may lie outside the grid
+  note: SGD (Nesterov): best at the highest lr of the grid (3e-2); its optimum may lie outside the grid
+  note: Lion: best at the lowest lr of the grid (3e-5); its optimum may lie outside the grid
+
+Augmentation (seed 0, delta vs reference mean), best first:
+  +0.0043  - hue/saturation/value                                     selected
+  +0.0017  + elastic deformation (p 0.25)                             within noise
+  +0.0016  + coarse dropout, mask cleared (p 0.3)                     within noise
+  +0.0015  - brightness/contrast                                      within noise
+  +0.0014  + random shadow (p 0.25)                                   within noise
+  +0.0000  Affine stronger (p 0.5, scale 0.75-1.33, rotation 45 deg)  within noise
+  -0.0003  + grid distortion (p 0.25)                                 within noise
+  -0.0003  - affine (scale 0.9-1.1, rotation 15 deg)                  within noise
+  -0.0005  + JPEG compression q 50-95 (p 0.3)                         within noise
+  -0.0011  + perspective (p 0.25)                                     within noise
+  -0.0015  + ISO sensor noise (p 0.2)                                 within noise
+  -0.0018  + grayscale (p 0.2)                                        within noise
+  -0.0018  + sharpen (p 0.2)                                          within noise
+  -0.0019  + random gamma (p 0.3)                                     within noise
+  -0.0019  - Gaussian blur/noise                                      within noise
+  -0.0021  + CutMix within the batch (p 0.5)                          within noise
+  -0.0021  + motion blur (p 0.2)                                      within noise
+  -0.0023  + downscale 0.5-0.9 (p 0.2)                                within noise
+  -0.0023  + CLAHE (p 0.25)                                           within noise
+  -0.0029  - horizontal/vertical flips                                within noise
+  -0.0069  No augmentation (crack-biased crop only)                   worse
+  -0.0071  Brightness/contrast stronger (limits 0.3)                  worse
+  -0.0072  - 90-degree rotations                                      worse
+  -0.0285  Uniform random crop instead of crack-biased crop           worse
+  -> positive changes (best per factor): aug_no_hsv
+
+Stage 2 candidates:
+  combo_top1             done         0.5552 (+0.0032)  RAdam, lr 1e-4; - hue/saturation/value
+
+Stage 3 pool (seed 0, best first; the top 2 with a positive delta get the extra seeds):
+  opt_radam_lr1e-4       0.5567 (+0.0047)
+  aug_no_hsv             0.5563 (+0.0043)
+  combo_top1             0.5552 (+0.0032)
+  opt_adamw_lr1e-4       0.5542 (+0.0022)  control (final_controls)
+
+Final (seeds [0, 1, 2]):
+  opt_radam_lr1e-4       0.5540 ± 0.0027
+  opt_adamw_lr1e-4       0.5540 ± 0.0019
+  aug_no_hsv             0.5539 ± 0.0024
+  ref                    0.5520 ± 0.0021
+  -> final recipe: opt_radam_lr1e-4, +0.0020 val IoU over the reference; per seed +0.0036, +0.0016, +0.0009; Wilcoxon on per-tile IoU p = 0.00339
+  config: ~/crack_benchmark_runs_v2/ablation_deepcrack/FINAL.yaml
+  changes from the benchmark protocol:
+    train.lr: 0.0003 -> 0.0001
+    train.optimizer: adamw -> radam
+
+Test set (once, threshold chosen on val, seeds [0, 1, 2]):
+  opt_radam_lr1e-4       IoU 0.5455 ± 0.0098  F1 0.7059  P 0.7110  R 0.7012  (seeds: 0.5523, 0.5499, 0.5343)
+  ref                    IoU 0.5360 ± 0.0085  F1 0.6979  P 0.6991  R 0.6969  (seeds: 0.5439, 0.5371, 0.5271)
+  -> opt_radam_lr1e-4 vs reference on test: +0.0095 IoU; per seed +0.0085, +0.0129, +0.0073; Wilcoxon on per-tile IoU p = 0.000265
+figure: ~/crack_benchmark_runs_v2/figures/ablation_deepcrack_optimizers.png
+figure: ~/crack_benchmark_runs_v2/figures/ablation_deepcrack_augmentation.png
+
+Next step: done (the test set has been used; do not tune further on it)

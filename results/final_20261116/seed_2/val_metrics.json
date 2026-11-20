@@ -1,0 +1,41 @@
+{
+  "best_epoch": 59,
+  "epochs_run": 79,
+  "seed": 2,
+  "recipe": {
+    "name": "tuned",
+    "epochs": 80,
+    "batch_size": 16,
+    "crop_size": 256,
+    "optimizer": "radam",
+    "lr": 0.0001,
+    "weight_decay": 0.0001,
+    "warmup_epochs": 2,
+    "min_lr_ratio": 0.01,
+    "grad_clip": 1.0,
+    "ema_decay": 0.999,
+    "patience": 20,
+    "min_epochs": 30,
+    "amp": true,
+    "hsv_p": 0.3,
+    "eval_max_side": 1024,
+    "eval_window": 512,
+    "eval_stride": 448,
+    "tolerance_px": 2
+  },
+  "device": "NVIDIA RTX A6000",
+  "threshold": 0.592156862745098,
+  "threshold_index": 151,
+  "threshold_source": "best pooled F1 on this split",
+  "n_tiles": 2449,
+  "metrics": {
+    "iou": 0.5394253467159528,
+    "f1": 0.7008139080816173,
+    "precision": 0.7167503691530589,
+    "recall": 0.6855707057968902,
+    "tol_f1_2px": 0.7934369962813828,
+    "tol_precision_2px": 0.8429941411733656,
+    "tol_recall_2px": 0.7493829763037595,
+    "average_precision": 0.7319596684125166
+  }
+}

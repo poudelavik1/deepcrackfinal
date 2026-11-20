@@ -1,0 +1,86 @@
+_base_: null
+protocol: ablation_deepcrack
+model: deepcrack
+run_name: opt_radam_lr1e-4
+data:
+  crop_size: 256
+  exclude_regex: []
+  eval_max_side: 1024
+  eval_window: 512
+  eval_stride: 448
+  max_train_samples: 0
+  max_eval_samples: 0
+aug:
+  flip: true
+  rotate90: true
+  affine_p: 0.3
+  affine_scale:
+  - 0.9
+  - 1.1
+  affine_rotate:
+  - -15
+  - 15
+  brightness_contrast_p: 0.5
+  brightness_limit: 0.15
+  contrast_limit: 0.15
+  hsv_p: 0.3
+  blur_noise_p: 0.15
+  crop: crack
+  elastic_p: 0
+  grid_distortion_p: 0
+  perspective_p: 0
+  clahe_p: 0
+  gamma_p: 0
+  motion_blur_p: 0
+  jpeg_p: 0
+  shadow_p: 0
+  dropout_p: 0
+  downscale_p: 0
+  iso_noise_p: 0
+  sharpen_p: 0
+  gray_p: 0
+  cutmix_p: 0
+train:
+  epochs: 80
+  batch_size: 16
+  accum_steps: 1
+  eval_batch_size: 16
+  optimizer: radam
+  optimizer_args: {}
+  lr: 0.0001
+  weight_decay: 0.0001
+  warmup_epochs: 2
+  min_lr_ratio: 0.01
+  grad_clip: 1.0
+  patience: 20
+  min_epochs: 30
+  amp: true
+  pretrained: true
+  deterministic: true
+loss:
+  name: bce_dice
+  bce_weight: 1.0
+  dice_weight: 1.0
+  aux_weight: 0.0
+recipe:
+  ema_decay: 0.999
+  encoder_lr_factor: 1.0
+  deep_supervision: false
+  tta: false
+  cldice_warmup_epochs: 0
+eval:
+  tolerances:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 5
+  threshold: 0.5
+ablation:
+  variant: opt_radam_lr1e-4
+  stage: screen
+  arm: optimizer
+  factor: optimizer
+  change: RAdam, lr 1e-4
+  parts: []
+  plan: configs/ablation/deepcrack.yaml

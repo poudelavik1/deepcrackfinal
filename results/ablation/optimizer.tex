@@ -1,0 +1,40 @@
+\begin{table}
+\caption{deepcrack: optimizers and learning rates (val IoU, seed 0; reference = mean of 3 seeds)}
+\label{tab:ablation_deepcrack_optimizer}
+\begin{tabular}{lllrrrr}
+\toprule
+optimizer & lr & variant & val\_iou & delta\_iou & val\_f1 & best\_epoch \\
+\midrule
+AdamW & 3e-5 & opt\_adamw\_lr3e-5 & 0.5489 & -0.0031 & 0.7088 & 58.0000 \\
+AdamW & 1e-4 & opt\_adamw\_lr1e-4 & 0.5542 & 0.0022 & 0.7131 & 58.0000 \\
+AdamW & 3e-4 & ref (mean) & 0.5520 & 0.0000 & 0.7113 & - \\
+AdamW & 1e-3 & opt\_adamw\_lr1e-3 & 0.5465 & -0.0055 & 0.7068 & 65.0000 \\
+Adam & 1e-4 & opt\_adam\_lr1e-4 & 0.5516 & -0.0004 & 0.7110 & 58.0000 \\
+Adam & 3e-4 & opt\_adam\_lr3e-4 & 0.5448 & -0.0072 & 0.7053 & 78.0000 \\
+Adam & 1e-3 & opt\_adam\_lr1e-3 & 0.4967 & -0.0553 & 0.6638 & 76.0000 \\
+NAdam & 1e-4 & opt\_nadam\_lr1e-4 & 0.5529 & 0.0009 & 0.7121 & 60.0000 \\
+NAdam & 3e-4 & opt\_nadam\_lr3e-4 & 0.5440 & -0.0080 & 0.7047 & 78.0000 \\
+NAdam & 1e-3 & opt\_nadam\_lr1e-3 & 0.5016 & -0.0504 & 0.6680 & 69.0000 \\
+RAdam & 3e-5 & opt\_radam\_lr3e-5 & 0.5510 & -0.0010 & 0.7105 & 59.0000 \\
+RAdam & 1e-4 & opt\_radam\_lr1e-4 & 0.5567 & 0.0047 & 0.7152 & 58.0000 \\
+RAdam & 3e-4 & opt\_radam\_lr3e-4 & 0.5401 & -0.0120 & 0.7013 & 78.0000 \\
+RAdam & 1e-3 & opt\_radam\_lr1e-3 & 0.4994 & -0.0526 & 0.6661 & 80.0000 \\
+Adamax & 1e-4 & opt\_adamax\_lr1e-4 & 0.5511 & -0.0009 & 0.7106 & 60.0000 \\
+Adamax & 3e-4 & opt\_adamax\_lr3e-4 & 0.5553 & 0.0033 & 0.7141 & 51.0000 \\
+Adamax & 1e-3 & opt\_adamax\_lr1e-3 & 0.5449 & -0.0071 & 0.7054 & 69.0000 \\
+Adamax & 3e-3 & opt\_adamax\_lr3e-3 & 0.5185 & -0.0335 & 0.6829 & 69.0000 \\
+RMSprop & 3e-5 & opt\_rmsprop\_lr3e-5 & 0.5549 & 0.0029 & 0.7138 & 58.0000 \\
+RMSprop & 1e-4 & opt\_rmsprop\_lr1e-4 & 0.5556 & 0.0036 & 0.7143 & 60.0000 \\
+RMSprop & 3e-4 & opt\_rmsprop\_lr3e-4 & 0.5384 & -0.0136 & 0.6999 & 79.0000 \\
+Adagrad & 3e-3 & opt\_adagrad\_lr3e-3 & 0.5500 & -0.0020 & 0.7096 & 59.0000 \\
+Adagrad & 1e-2 & opt\_adagrad\_lr1e-2 & 0.5409 & -0.0111 & 0.7021 & 69.0000 \\
+Adagrad & 3e-2 & opt\_adagrad\_lr3e-2 & 0.5119 & -0.0401 & 0.6772 & 76.0000 \\
+SGD (Nesterov) & 3e-3 & opt\_sgd\_lr3e-3 & 0.5354 & -0.0166 & 0.6974 & 64.0000 \\
+SGD (Nesterov) & 1e-2 & opt\_sgd\_lr1e-2 & 0.5475 & -0.0045 & 0.7076 & 58.0000 \\
+SGD (Nesterov) & 3e-2 & opt\_sgd\_lr3e-2 & 0.5523 & 0.0003 & 0.7116 & 58.0000 \\
+Lion & 3e-5 & opt\_lion\_lr3e-5 & 0.5495 & -0.0025 & 0.7093 & 65.0000 \\
+Lion & 1e-4 & opt\_lion\_lr1e-4 & 0.5399 & -0.0121 & 0.7012 & 58.0000 \\
+Lion & 3e-4 & opt\_lion\_lr3e-4 & 0.5209 & -0.0311 & 0.6850 & 58.0000 \\
+\bottomrule
+\end{tabular}
+\end{table}

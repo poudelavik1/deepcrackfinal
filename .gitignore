@@ -1,4 +1,4 @@
-# Code only: never commit data, weights or results.
+# Never commit data, weights or run folders. results/ holds only the small metric files of the thesis runs.
 runs/
 predictions/
 data/

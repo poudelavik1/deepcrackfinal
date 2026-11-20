@@ -1,0 +1,25 @@
+variant,factor,change,val_iou,delta_iou,val_f1,val_precision,val_recall,verdict
+aug_no_hsv,hsv,- hue/saturation/value,0.5563,0.0043,0.7149,0.7505,0.6826,selected
+aug_elastic,elastic,+ elastic deformation (p 0.25),0.5537,0.0017,0.7128,0.7474,0.6812,within noise
+aug_dropout,dropout,"+ coarse dropout, mask cleared (p 0.3)",0.5536,0.0016,0.7126,0.7564,0.6737,within noise
+aug_no_brightness,brightness_contrast,- brightness/contrast,0.5535,0.0015,0.7126,0.7499,0.6789,within noise
+aug_shadow,shadow,+ random shadow (p 0.25),0.5534,0.0014,0.7125,0.7518,0.6771,within noise
+aug_affine_strong,affine,"Affine stronger (p 0.5, scale 0.75-1.33, rotation 45 deg)",0.552,0.0,0.7113,0.7539,0.6733,within noise
+aug_grid_distortion,grid_distortion,+ grid distortion (p 0.25),0.5517,-0.0003,0.7111,0.7499,0.6761,within noise
+aug_no_affine,affine,"- affine (scale 0.9-1.1, rotation 15 deg)",0.5517,-0.0003,0.7111,0.7447,0.6804,within noise
+aug_jpeg,jpeg,+ JPEG compression q 50-95 (p 0.3),0.5515,-0.0005,0.7109,0.752,0.6741,within noise
+aug_perspective,perspective,+ perspective (p 0.25),0.5509,-0.0011,0.7105,0.745,0.679,within noise
+aug_iso_noise,iso_noise,+ ISO sensor noise (p 0.2),0.5505,-0.0015,0.7101,0.7513,0.6732,within noise
+aug_gray,gray,+ grayscale (p 0.2),0.5502,-0.0018,0.7098,0.7546,0.6701,within noise
+aug_sharpen,sharpen,+ sharpen (p 0.2),0.5502,-0.0018,0.7098,0.7486,0.6749,within noise
+aug_gamma,gamma,+ random gamma (p 0.3),0.5501,-0.0019,0.7098,0.7505,0.6733,within noise
+aug_no_blur_noise,blur_noise,- Gaussian blur/noise,0.5501,-0.0019,0.7097,0.7519,0.6721,within noise
+aug_cutmix,cutmix,+ CutMix within the batch (p 0.5),0.55,-0.0021,0.7096,0.7495,0.6738,within noise
+aug_motion_blur,motion_blur,+ motion blur (p 0.2),0.5499,-0.0021,0.7096,0.7455,0.677,within noise
+aug_downscale,downscale,+ downscale 0.5-0.9 (p 0.2),0.5497,-0.0023,0.7094,0.7498,0.6732,within noise
+aug_clahe,clahe,+ CLAHE (p 0.25),0.5497,-0.0023,0.7094,0.7474,0.6751,within noise
+aug_no_flip,flip,- horizontal/vertical flips,0.5492,-0.0029,0.709,0.7483,0.6736,within noise
+aug_none,none,No augmentation (crack-biased crop only),0.5451,-0.0069,0.7056,0.7488,0.6671,worse
+aug_brightness_strong,brightness_contrast,Brightness/contrast stronger (limits 0.3),0.5449,-0.0071,0.7054,0.7397,0.6742,worse
+aug_no_rotate90,rotate90,- 90-degree rotations,0.5448,-0.0072,0.7054,0.7418,0.6723,worse
+aug_random_crop,crop,Uniform random crop instead of crack-biased crop,0.5235,-0.0285,0.6872,0.7275,0.6512,worse
