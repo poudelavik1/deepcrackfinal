@@ -6,6 +6,7 @@
     python train_deepcrack.py predict  --checkpoint runs/deepcrack_s0/best.pt --images photos/ --out predictions/
     python train_deepcrack.py summarize runs/new     # seeds in runs/new/seed_*: mean +- std, and the run to keep
     python train_deepcrack.py recipe                 # the recipe, checked setting by setting against the ablation
+    python train_deepcrack.py ensemble --runs runs/new --data DATA   # seeds combined / flips: chosen on val, then test
 
 Dataset (DATA), either layout works (image and mask files are paired by name; masks are crack > 0):
     DATA/train/images  DATA/train/masks  DATA/val/...  [DATA/test/...]       ready-made split, or
@@ -535,11 +536,29 @@ def score_split(tiles: list[tuple[np.ndarray, np.ndarray]], threshold_index: int
 
 
 @torch.no_grad()
-def collect(model: nn.Module, loader: DataLoader, recipe: Recipe, device: torch.device) -> list[tuple[np.ndarray, np.ndarray]]:
-    model.eval()
+@torch.no_grad()
+def combined_probability(models: list[nn.Module], images: torch.Tensor, recipe: Recipe, tta: bool) -> torch.Tensor:
+    """Mean crack probability of several models; with tta also over the horizontally and vertically flipped image."""
+    total, count = None, 0
+    for model in models:
+        views = [predict_probability(model, images, recipe, recipe.amp)]
+        if tta:
+            views += [predict_probability(model, images.flip(dims), recipe, recipe.amp).flip(dims)
+                      for dims in ((-1,), (-2,))]
+        for view in views:
+            total = view if total is None else total + view
+            count += 1
+    return total / count
+
+
+def collect(model: nn.Module | list[nn.Module], loader: DataLoader, recipe: Recipe, device: torch.device,
+            tta: bool = False) -> list[tuple[np.ndarray, np.ndarray]]:
+    models = model if isinstance(model, list) else [model]
+    for one in models:
+        one.eval()
     tiles = []
     for batch in loader:
-        probability = predict_probability(model, batch["image"].to(device, non_blocking=True), recipe, recipe.amp)
+        probability = combined_probability(models, batch["image"].to(device, non_blocking=True), recipe, tta)
         prob_u8 = (probability * 255.0).round().clamp(0, 255).to(torch.uint8).cpu().numpy()
         masks = batch["mask"].to(torch.uint8).numpy()
         tiles += [(prob_u8[i, 0], masks[i, 0]) for i in range(len(batch["name"]))]
@@ -757,9 +776,67 @@ def evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def ensemble(args: argparse.Namespace) -> int:
+    """Single model vs the seeds combined, each with and without flips: chosen on val, then the test split once."""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    root = Path(args.runs)
+    checkpoints = sorted(root.glob("seed_*/best.pt"))
+    if len(checkpoints) < 2:
+        raise SystemExit(f"Need at least two seed_*/best.pt under {root}")
+    loaded = [load_checkpoint(str(path), device) for path in checkpoints]
+    models, recipe = [model for model, _, _ in loaded], loaded[0][1]
+    val_iou = [json.loads((path.parent / "val_metrics.json").read_text(encoding="utf-8"))["metrics"]["iou"]
+               for path in checkpoints]
+    keep = int(np.argmax(val_iou))   # the run that summarize keeps (best val IoU)
+    splits = load_splits(Path(args.data), checkpoints[0].parent)
+    workers = args.workers if args.workers is not None else default_workers()
+    val_loader = eval_loader(splits["val"], recipe, workers)
+    single = checkpoints[keep].parent.name
+    options = [(f"{single} alone", [keep], False), (f"{single} + flips", [keep], True),
+               (f"{len(models)} seeds", list(range(len(models))), False),
+               (f"{len(models)} seeds + flips", list(range(len(models))), True)]
+    print(f"val ({len(splits['val'])} tiles), threshold chosen on val for each option:")
+    rows = []
+    for label, members, tta in options:
+        result = score_split(collect([models[i] for i in members], val_loader, recipe, device, tta), None,
+                             recipe.tolerance_px)
+        rows.append({"option": label, "members": members, "checkpoints": [str(checkpoints[i]) for i in members],
+                     "tta": tta, "passes_per_image": len(members) * (3 if tta else 1), **result})
+        print(f"  {label:<20} {rows[-1]['passes_per_image']} pass(es) | threshold {result['threshold']:.3f} | "
+              + metrics_line(result["metrics"]), flush=True)
+    best = max(rows, key=lambda row: row["metrics"]["iou"])
+    gain = best["metrics"]["iou"] - rows[0]["metrics"]["iou"]
+    print(f"-> chosen on val: {best['option']} ({gain:+.4f} val IoU over {single} alone)")
+    out = {"chosen": best["option"], "checkpoints": best["checkpoints"], "tta": best["tta"],
+           "threshold": best["threshold"], "threshold_index": best["threshold_index"], "val": rows}
+    if "test" in splits:
+        test_loader = eval_loader(splits["test"], recipe, workers)
+        test = score_split(collect([models[i] for i in best["members"]], test_loader, recipe, device, best["tta"]),
+                           best["threshold_index"], recipe.tolerance_px)
+        out["test"] = test
+        single_test = checkpoints[keep].parent / "test_metrics.json"
+        if single_test.exists():
+            out["single_test"] = json.loads(single_test.read_text(encoding="utf-8"))["metrics"]
+        print(f"[test] {best['option']}, threshold {test['threshold']:.3f} (chosen on val) | "
+              + metrics_line(test["metrics"]))
+        if "single_test" in out and best["option"] != rows[0]["option"]:
+            print(f"       vs {single} alone on test: {test['metrics']['iou'] - out['single_test']['iou']:+.4f} IoU")
+    (root / "ensemble.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
+    print(f"[done] {root / 'ensemble.json'}  (predict --ensemble {root / 'ensemble.json'} uses this setup)")
+    return 0
+
+
 def predict(args: argparse.Namespace) -> int:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model, recipe, threshold = load_checkpoint(args.checkpoint, device)
+    tta = False
+    if args.ensemble:   # the setup `ensemble` chose on val: its checkpoints, flips and threshold
+        setup = json.loads(Path(args.ensemble).read_text(encoding="utf-8"))
+        loaded = [load_checkpoint(path, device) for path in setup["checkpoints"]]
+        model, recipe, threshold, tta = [m for m, _, _ in loaded], loaded[0][1], setup["threshold"], setup["tta"]
+    elif args.checkpoint:
+        model, recipe, threshold = load_checkpoint(args.checkpoint, device)
+    else:
+        raise SystemExit("Pass --checkpoint best.pt or --ensemble ensemble.json")
     if args.threshold is not None:
         threshold = args.threshold
     if threshold is None:
@@ -770,7 +847,8 @@ def predict(args: argparse.Namespace) -> int:
     files = [source] if source.is_file() else sorted(p for p in source.iterdir() if p.suffix.lower() in IMAGE_EXTENSIONS)
     for path in files:
         image = read_image(path)
-        probability = predict_probability(model, to_tensors(image).unsqueeze(0).to(device), recipe, recipe.amp)[0, 0]
+        models = model if isinstance(model, list) else [model]
+        probability = combined_probability(models, to_tensors(image).unsqueeze(0).to(device), recipe, tta)[0, 0]
         prob_u8 = (probability * 255.0).round().clamp(0, 255).to(torch.uint8).cpu().numpy()
         mask = (prob_u8 >= max(1, round(threshold * 255))).astype(np.uint8) * 255
         cv2.imwrite(str(out / f"{path.stem}_prob.png"), prob_u8)
@@ -947,8 +1025,15 @@ def main() -> int:
     p.add_argument("--save", help="write the metrics to this JSON file")
     p.set_defaults(handler=evaluate)
 
+    p = commands.add_parser("ensemble", help="the seeds combined (and flips) vs one model: chosen on val, then test")
+    p.add_argument("--runs", required=True, help="folder with seed_*/best.pt, e.g. runs/new")
+    p.add_argument("--data", required=True)
+    p.add_argument("--workers", type=int)
+    p.set_defaults(handler=ensemble)
+
     p = commands.add_parser("predict", help="crack masks for new images (any size)")
-    p.add_argument("--checkpoint", required=True)
+    p.add_argument("--checkpoint", help="one best.pt")
+    p.add_argument("--ensemble", help="ensemble.json written by `ensemble` (several best.pt, flips, threshold)")
     p.add_argument("--images", required=True, help="an image or a folder of images")
     p.add_argument("--out", required=True)
     p.add_argument("--threshold", type=float, help="default: the one stored in the checkpoint")
