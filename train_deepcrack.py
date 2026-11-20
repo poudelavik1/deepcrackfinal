@@ -869,12 +869,13 @@ def summarize(args: argparse.Namespace) -> int:
     rows = []
     for run in runs:
         row: dict[str, Any] = {"run": run.name}
-        for split in ("val", "test"):
-            path = run / f"{split}_metrics.json"
+        for split, filename in (("val", "val_metrics.json"), ("test", args.test_file)):
+            path = run / filename
             if not path.exists():
                 continue
             result = json.loads(path.read_text(encoding="utf-8"))
-            row.update(seed=result.get("seed"), best_epoch=result.get("best_epoch"), threshold=result["threshold"])
+            if split == "val":   # seed, epoch and threshold come from training (evaluate --save does not store them)
+                row.update(seed=result.get("seed"), best_epoch=result.get("best_epoch"), threshold=result["threshold"])
             row.update({f"{split}_{key}": value for key, value in result["metrics"].items()})
         rows.append(row)
     columns = [c for c in rows[0] if c.startswith(("val_", "test_"))]
@@ -902,15 +903,17 @@ def summarize(args: argparse.Namespace) -> int:
     print(f"\nkeep: {root / keep['run'] / 'best.pt'} (best val IoU {keep['val_iou']:.4f}; chosen on val, not test)")
     if "test_iou" in summary["mean"] and len(rows) > 1:
         print(f"report: test IoU {summary['mean']['test_iou']:.4f} +- {summary['std']['test_iou']:.4f} over {len(rows)} seeds")
-    (root / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    with (root / "summary.csv").open("w", newline="", encoding="utf-8") as handle:
+    base = "summary" if args.test_file == "test_metrics.json" else f"summary_{Path(args.test_file).stem}"
+    summary["test_file"] = args.test_file
+    (root / f"{base}.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    with (root / f"{base}.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["run", "seed", "best_epoch", "threshold"] + columns,
                                 extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
         for name in ("mean", "std"):
             writer.writerow({"run": name, **summary[name]})
-    print(f"[done] {root / 'summary.json'}, {root / 'summary.csv'}")
+    print(f"[done] {root / (base + '.json')}, {root / (base + '.csv')} (test metrics from {args.test_file})")
     return 0
 
 
@@ -959,6 +962,8 @@ def main() -> int:
 
     p = commands.add_parser("summarize", help="mean +- std over the seeds (run folders) in a folder, and the run to keep")
     p.add_argument("runs", help="folder with one run folder per seed, e.g. runs/new (seed_0, seed_1, seed_2)")
+    p.add_argument("--test-file", default="test_metrics.json",
+                   help="test metrics per run: test_metrics.json (written by train) or test_eval.json (evaluate --save)")
     p.set_defaults(handler=summarize)
 
     args = parser.parse_args()

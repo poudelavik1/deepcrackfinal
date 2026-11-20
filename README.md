@@ -156,7 +156,12 @@ predicted pixel as correct within 2 px of a labelled one and vice versa.
 git clone https://github.com/poudelavik1/deepcrackfinal.git ~/deepcrackfinal && cd ~/deepcrackfinal
 DATA=~/new_dataset OUT=~/deepcrack_runs/new_s0 SEED=0 sbatch slurm/train.sbatch    # one seed
 DATA=~/new_dataset OUT=~/deepcrack_runs/new sbatch --array=0-2 slurm/train.sbatch    # seeds 0 1 2
+DATA=~/new_dataset RUNS=~/deepcrack_runs/new sbatch slurm/evaluate.sbatch            # test set again, every seed
 ```
+
+`evaluate.sbatch` scores each `best.pt` on the test split with `evaluate` (threshold stored in the
+checkpoint, chosen on val), writes `<run>/test_eval.json`, and summarizes the seeds in
+`summary_test_eval.csv`. It gives the same numbers as the test scoring at the end of `train`.
 
 With `--array`, task n trains seed n in `OUT/seed_n` and then runs `summarize OUT`, so after the
 last seed `OUT/summary.csv` holds the mean ± std. On an account limited to one running job, the
