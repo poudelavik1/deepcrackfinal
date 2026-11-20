@@ -5,6 +5,7 @@
     python train_deepcrack.py evaluate --checkpoint runs/deepcrack_s0/best.pt --data DATA --split test
     python train_deepcrack.py predict  --checkpoint runs/deepcrack_s0/best.pt --images photos/ --out predictions/
     python train_deepcrack.py summarize runs/new     # seeds in runs/new/seed_*: mean +- std, and the run to keep
+    python train_deepcrack.py recipe                 # the recipe, checked setting by setting against the ablation
 
 Dataset (DATA), either layout works (image and mask files are paired by name; masks are crack > 0):
     DATA/train/images  DATA/train/masks  DATA/val/...  [DATA/test/...]       ready-made split, or
@@ -75,13 +76,15 @@ LEVELS = 256   # probabilities are scored as 8-bit values; threshold k means pro
 # =========================================================================== #
 @dataclass(frozen=True)
 class Recipe:
+    """Every setting of a training run. "tuned" is the winner of the DeepCrack ablation (FINAL.yaml of the
+    ablation, in results/ablation/): `python train_deepcrack.py recipe` checks it setting by setting."""
     name: str = "tuned"
-    epochs: int = 80
-    batch_size: int = 16
-    crop_size: int = 256
+    # optimization (ablation result: RAdam at lr 1e-4; the rest is the benchmark protocol)
     optimizer: str = "radam"          # radam | adamw | adam | sgd
     lr: float = 1e-4
     weight_decay: float = 1e-4
+    epochs: int = 80
+    batch_size: int = 16
     warmup_epochs: int = 2
     min_lr_ratio: float = 0.01
     grad_clip: float = 1.0
@@ -89,7 +92,19 @@ class Recipe:
     patience: int = 20
     min_epochs: int = 30
     amp: bool = True
-    hsv_p: float = 0.3                # hue/saturation/value jitter, as in the benchmark (0 helps alone, not with lr 1e-4)
+    # augmentation (ablation result: the benchmark augmentation; none of the 14 extra transforms helped)
+    crop_size: int = 256              # random crop that contains a crack when the tile has one
+    flip: bool = True                 # horizontal and vertical, p 0.5 each
+    rotate90: bool = True             # p 0.5
+    affine_p: float = 0.3
+    affine_scale: tuple[float, float] = (0.9, 1.1)
+    affine_rotate: tuple[float, float] = (-15.0, 15.0)
+    brightness_contrast_p: float = 0.5
+    brightness_limit: float = 0.15
+    contrast_limit: float = 0.15
+    hsv_p: float = 0.3                # hue/saturation/value jitter (0 helps alone, not with lr 1e-4)
+    blur_noise_p: float = 0.15        # Gaussian blur 3x3 or Gaussian noise
+    # evaluation
     eval_max_side: int = 1024         # larger images are predicted with a sliding window
     eval_window: int = 512
     eval_stride: int = 448
@@ -202,19 +217,27 @@ def read_pair(image_path: Path, mask_path: Path) -> tuple[np.ndarray, np.ndarray
 
 
 def train_transform(recipe: Recipe, seed: int):
+    """The augmentation of the ablation's final recipe, step for step as in the benchmark code."""
     import albumentations as A
 
     crop = recipe.crop_size
     steps: list[Any] = [
         A.PadIfNeeded(min_height=crop, min_width=crop, border_mode=cv2.BORDER_REFLECT_101),
         A.CropNonEmptyMaskIfExists(height=crop, width=crop),   # most of a photo is background
-        A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5), A.RandomRotate90(p=0.5),
-        A.Affine(scale=(0.9, 1.1), rotate=(-15, 15), p=0.3),
-        A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.15, p=0.5),
     ]
+    if recipe.flip:
+        steps += [A.HorizontalFlip(p=0.5), A.VerticalFlip(p=0.5)]
+    if recipe.rotate90:
+        steps.append(A.RandomRotate90(p=0.5))
+    if recipe.affine_p > 0:
+        steps.append(A.Affine(scale=tuple(recipe.affine_scale), rotate=tuple(recipe.affine_rotate), p=recipe.affine_p))
+    if recipe.brightness_contrast_p > 0:
+        steps.append(A.RandomBrightnessContrast(brightness_limit=recipe.brightness_limit,
+                                                contrast_limit=recipe.contrast_limit, p=recipe.brightness_contrast_p))
     if recipe.hsv_p > 0:
         steps.append(A.HueSaturationValue(hue_shift_limit=5, sat_shift_limit=15, val_shift_limit=10, p=recipe.hsv_p))
-    steps.append(A.OneOf([A.GaussianBlur(blur_limit=(3, 3)), A.GaussNoise()], p=0.15))
+    if recipe.blur_noise_p > 0:
+        steps.append(A.OneOf([A.GaussianBlur(blur_limit=(3, 3)), A.GaussNoise()], p=recipe.blur_noise_p))
     try:
         return A.Compose(steps, seed=seed)
     except TypeError:   # albumentations < 1.4.22 has no seed argument
@@ -763,6 +786,78 @@ def predict(args: argparse.Namespace) -> int:
 
 
 # =========================================================================== #
+# The recipe against the ablation result
+# =========================================================================== #
+ABLATION_FINAL = Path(__file__).resolve().parent / "results" / "ablation" / "FINAL.yaml"
+# FINAL.yaml key (benchmark config) -> Recipe field
+RECIPE_KEYS = {
+    "train.optimizer": "optimizer", "train.lr": "lr", "train.weight_decay": "weight_decay", "train.epochs": "epochs",
+    "train.batch_size": "batch_size", "train.warmup_epochs": "warmup_epochs", "train.min_lr_ratio": "min_lr_ratio",
+    "train.grad_clip": "grad_clip", "train.patience": "patience", "train.min_epochs": "min_epochs", "train.amp": "amp",
+    "recipe.ema_decay": "ema_decay", "data.crop_size": "crop_size", "aug.flip": "flip", "aug.rotate90": "rotate90",
+    "aug.affine_p": "affine_p", "aug.affine_scale": "affine_scale", "aug.affine_rotate": "affine_rotate",
+    "aug.brightness_contrast_p": "brightness_contrast_p", "aug.brightness_limit": "brightness_limit",
+    "aug.contrast_limit": "contrast_limit", "aug.hsv_p": "hsv_p", "aug.blur_noise_p": "blur_noise_p",
+    "data.eval_max_side": "eval_max_side", "data.eval_window": "eval_window", "data.eval_stride": "eval_stride",
+}
+# Settings this script implements as fixed code (the benchmark's values; the ablation did not change them)
+FIXED_IN_CODE = {
+    "model": "deepcrack", "aug.crop": "crack", "train.accum_steps": 1, "train.optimizer_args": {},
+    "train.eval_batch_size": 16, "train.pretrained": True, "loss.name": "bce_dice", "loss.bce_weight": 1.0,
+    "loss.dice_weight": 1.0, "loss.aux_weight": 0.0, "recipe.encoder_lr_factor": 1.0,
+    "recipe.deep_supervision": False, "recipe.tta": False, "eval.threshold": 0.5,
+    **{f"aug.{key}": 0 for key in ("elastic_p", "grid_distortion_p", "perspective_p", "clahe_p", "gamma_p",
+                                   "motion_blur_p", "jpeg_p", "shadow_p", "dropout_p", "downscale_p",
+                                   "iso_noise_p", "sharpen_p", "gray_p", "cutmix_p")},
+}
+
+
+def same(a: Any, b: Any) -> bool:
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return len(a) == len(b) and all(same(x, y) for x, y in zip(a, b))
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is b or a == b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return math.isclose(float(a), float(b), rel_tol=1e-9, abs_tol=1e-12)
+    return a == b
+
+
+def check_recipe(args: argparse.Namespace) -> int:
+    """Print the recipe and compare every setting with the ablation's FINAL.yaml."""
+    import yaml
+
+    recipe = RECIPES[args.recipe]
+    path = Path(args.final)
+    if not path.exists():
+        raise SystemExit(f"{path} not found (the ablation's FINAL.yaml)")
+    final = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    def lookup(key: str) -> Any:
+        node: Any = final
+        for part in key.split("."):
+            node = node[part]
+        return node
+
+    rows, bad = [], 0
+    for key, field in RECIPE_KEYS.items():
+        ours = getattr(recipe, field)
+        ok = same(ours, lookup(key))
+        bad += not ok
+        rows.append((key, lookup(key), ours, "ok" if ok else "DIFFERENT", f"recipe.{field}"))
+    for key, ours in FIXED_IN_CODE.items():
+        ok = same(ours, lookup(key))
+        bad += not ok
+        rows.append((key, lookup(key), ours, "ok" if ok else "DIFFERENT", "fixed in code"))
+    print(f"recipe '{recipe.name}' vs {path} (ablation winner: {final.get('run_name', '?')})", end="\n\n")
+    print(f"{'ablation setting':<28} {'ablation':>14} {'this script':>14}  {'':<9} where")
+    for key, theirs, ours, status, where in rows:
+        print(f"{key:<28} {str(theirs):>14} {str(ours):>14}  {status:<9} {where}")
+    print()
+    print(f"{len(rows) - bad} of {len(rows)} settings match" + ("" if not bad else f"; {bad} DIFFER"))
+    return 1 if bad else 0
+
+
+# =========================================================================== #
 # Summary over seeds
 # =========================================================================== #
 def summarize(args: argparse.Namespace) -> int:
@@ -856,6 +951,11 @@ def main() -> int:
     p.add_argument("--threshold", type=float, help="default: the one stored in the checkpoint")
     p.add_argument("--overlay", action="store_true", help="also save the cracks drawn in red over the image")
     p.set_defaults(handler=predict)
+
+    p = commands.add_parser("recipe", help="show a recipe and check it against the ablation's FINAL.yaml")
+    p.add_argument("--recipe", choices=sorted(RECIPES), default="tuned")
+    p.add_argument("--final", default=str(ABLATION_FINAL), help="FINAL.yaml of the ablation (default: results/ablation/)")
+    p.set_defaults(handler=check_recipe)
 
     p = commands.add_parser("summarize", help="mean +- std over the seeds (run folders) in a folder, and the run to keep")
     p.add_argument("runs", help="folder with one run folder per seed, e.g. runs/new (seed_0, seed_1, seed_2)")

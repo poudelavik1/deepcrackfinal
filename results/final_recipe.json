@@ -1,11 +1,10 @@
 {
   "name": "tuned",
-  "epochs": 80,
-  "batch_size": 16,
-  "crop_size": 256,
   "optimizer": "radam",
   "lr": 0.0001,
   "weight_decay": 0.0001,
+  "epochs": 80,
+  "batch_size": 16,
   "warmup_epochs": 2,
   "min_lr_ratio": 0.01,
   "grad_clip": 1.0,
@@ -13,7 +12,23 @@
   "patience": 20,
   "min_epochs": 30,
   "amp": true,
+  "crop_size": 256,
+  "flip": true,
+  "rotate90": true,
+  "affine_p": 0.3,
+  "affine_scale": [
+    0.9,
+    1.1
+  ],
+  "affine_rotate": [
+    -15.0,
+    15.0
+  ],
+  "brightness_contrast_p": 0.5,
+  "brightness_limit": 0.15,
+  "contrast_limit": 0.15,
   "hsv_p": 0.3,
+  "blur_noise_p": 0.15,
   "eval_max_side": 1024,
   "eval_window": 512,
   "eval_stride": 448,

@@ -104,6 +104,20 @@ The model to use is **seed 0** (best val IoU, 0.5488; best epoch 79, threshold 0
 outside this repository. Test numbers of the two splits are not comparable: they are different
 tiles.
 
+## Same recipe as the ablation
+
+`python train_deepcrack.py recipe` compares every setting of the ablation's winner
+([`results/ablation/FINAL.yaml`](results/ablation/FINAL.yaml)) with this script: 26 are fields of the
+recipe (optimizer, schedule, EMA, crop, each augmentation and its strength, evaluation window), and
+28 are fixed in the code (model, loss, crack-biased crop, no deep supervision or TTA, and the 14
+extra augmentations of the ablation switched off). **All 54 match**; the command exits with an
+error if one ever differs.
+
+The training itself was checked against the ablation code too: from the same seed (4 epochs on a
+small dataset, CPU), this script and the benchmark's `train.py` with `FINAL.yaml` give
+**bit-identical** weights, EMA weights and optimizer state. On a GPU, both are non-deterministic in
+the same small way (cuDNN), so seeds then differ by about ±0.002 val IoU.
+
 ## Commands
 
 ```bash
@@ -112,6 +126,7 @@ python train_deepcrack.py train    --data DATA --out RUN [--seed 0] [--recipe tu
 python train_deepcrack.py evaluate --checkpoint RUN/best.pt --data DATA --split test [--threshold T] [--save m.json]
 python train_deepcrack.py predict  --checkpoint RUN/best.pt --images FOLDER_OR_IMAGE --out OUT [--overlay]
 python train_deepcrack.py summarize RUNS        # RUNS/seed_0, seed_1, ...: mean ± std, and the run to keep
+python train_deepcrack.py recipe [--recipe tuned|benchmark]   # the recipe vs the ablation's FINAL.yaml
 ```
 
 - A run folder that has `FINISHED` is skipped (`--force` retrains it); an interrupted run resumes
