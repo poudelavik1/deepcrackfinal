@@ -3,7 +3,8 @@
 #     DATA=~/new_dataset RUNS=~/deepcrack_runs/new sbatch slurm/evaluate.sbatch
 # Every RUNS/seed_*/best.pt (or RUNS/best.pt) is scored and written to <run>/<split>_eval.json; for the test split
 # the seeds are then summarized (mean +- std, the run to keep) in RUNS/summary_test_eval.{csv,json}.
-# Optional: SPLIT (default test), ENV_DIR (conda env, default ~/.conda/envs/swinunet).
+# Optional: SPLITS (default "test"; e.g. "train val test"), PER_TILE=1 (also <run>/<split>_per_tile.csv: one row per
+# tile with its pixel counts, to find the datasets / tiles the model disagrees with), ENV_DIR (conda env).
 #SBATCH --job-name=deepcrack_eval
 #SBATCH --partition=ASL-gpu
 #SBATCH --nodes=1
@@ -17,7 +18,7 @@
 set -uo pipefail
 : "${DATA:?Set DATA=<dataset folder>}"
 : "${RUNS:?Set RUNS=<folder of the run, or of its seed_* runs>}"
-SPLIT="${SPLIT:-test}"
+SPLITS="${SPLITS:-${SPLIT:-test}}"
 cd "${SLURM_SUBMIT_DIR:-$(pwd)}" || exit 1
 
 # Compute nodes have no conda: put the environment on PATH instead of activating it.
@@ -27,7 +28,7 @@ export LD_LIBRARY_PATH="$ENV_DIR/lib:${LD_LIBRARY_PATH:-}"
 export TORCH_HOME="${TORCH_HOME:-$HOME/weights_cache/torch}"
 export PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1 MPLBACKEND=Agg
 
-echo "===== deepcrack evaluation ${SLURM_JOB_ID:-} | $SPLIT split of $DATA | $RUNS | $(hostname) | $(date) ====="
+echo "===== deepcrack evaluation ${SLURM_JOB_ID:-} | $SPLITS of $DATA | $RUNS | $(hostname) | $(date) ====="
 echo "code   : $(git rev-parse --short HEAD 2>/dev/null)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null || echo "no GPU visible"
 
@@ -36,13 +37,17 @@ COUNT=0
 for CHECKPOINT in "$RUNS"/seed_*/best.pt "$RUNS"/best.pt; do
     [ -f "$CHECKPOINT" ] || continue
     RUN="$(dirname "$CHECKPOINT")"
-    echo "----- $RUN"
-    python -u train_deepcrack.py evaluate --checkpoint "$CHECKPOINT" --data "$DATA" --split "$SPLIT" \
-        --workers "${SLURM_CPUS_PER_TASK:-8}" --save "$RUN/${SPLIT}_eval.json" || STATUS=1
+    for SPLIT in $SPLITS; do
+        echo "----- $RUN ($SPLIT)"
+        EXTRA=()
+        if [ "${PER_TILE:-0}" = "1" ]; then EXTRA=(--per-tile "$RUN/${SPLIT}_per_tile.csv"); fi
+        python -u train_deepcrack.py evaluate --checkpoint "$CHECKPOINT" --data "$DATA" --split "$SPLIT" \
+            --workers "${SLURM_CPUS_PER_TASK:-8}" --save "$RUN/${SPLIT}_eval.json" "${EXTRA[@]}" || STATUS=1
+    done
     COUNT=$((COUNT + 1))
 done
 [ "$COUNT" -gt 0 ] || { echo "No best.pt under $RUNS" >&2; exit 1; }
-if [ "$SPLIT" = "test" ] && [ "$STATUS" -eq 0 ] && ls "$RUNS"/seed_*/best.pt > /dev/null 2>&1; then
+if [[ " $SPLITS " == *" test "* ]] && [ "$STATUS" -eq 0 ] && ls "$RUNS"/seed_*/best.pt > /dev/null 2>&1; then
     python -u train_deepcrack.py summarize "$RUNS" --test-file test_eval.json || STATUS=1
 fi
 echo "===== finished $(date) | exit $STATUS ====="

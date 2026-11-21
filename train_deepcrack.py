@@ -498,8 +498,9 @@ def distance_to(mask: np.ndarray) -> np.ndarray:
 
 
 def score_split(tiles: list[tuple[np.ndarray, np.ndarray]], threshold_index: int | None,
-                tolerance: int) -> dict[str, Any]:
-    """Metrics of (8-bit probability, {0,1} mask) tiles. threshold_index None: choose the best pooled F1 here."""
+                tolerance: int, per_tile: bool = False) -> dict[str, Any]:
+    """Metrics of (8-bit probability, {0,1} mask) tiles. threshold_index None: choose the best pooled F1 here.
+    per_tile: also the pixel counts of every tile at that threshold (result["per_tile"], in tile order)."""
     positive, negative = np.zeros(LEVELS, np.int64), np.zeros(LEVELS, np.int64)
     for prob_u8, gt in tiles:
         gt = gt.astype(bool)
@@ -520,19 +521,24 @@ def score_split(tiles: list[tuple[np.ndarray, np.ndarray]], threshold_index: int
     k = threshold_index - 1
     result = scores(tp_curve[k], fp_curve[k], fn_curve[k])
     n_pred = n_gt = pred_hit = gt_hit = 0
+    rows = []
     for prob_u8, gt in tiles:
         pred, gt = prob_u8 >= threshold_index, gt.astype(bool)
-        n_pred += int(pred.sum())
-        n_gt += int(gt.sum())
-        pred_hit += int((distance_to(gt)[pred] <= tolerance).sum())
-        gt_hit += int((distance_to(pred)[gt] <= tolerance).sum())
+        tile_pred, tile_gt = int(pred.sum()), int(gt.sum())
+        tile_pred_hit = int((distance_to(gt)[pred] <= tolerance).sum())
+        tile_gt_hit = int((distance_to(pred)[gt] <= tolerance).sum())
+        n_pred, n_gt, pred_hit, gt_hit = n_pred + tile_pred, n_gt + tile_gt, pred_hit + tile_pred_hit, gt_hit + tile_gt_hit
+        tp = int((pred & gt).sum())
+        rows.append({"tp": tp, "fp": tile_pred - tp, "fn": tile_gt - tp, "gt_pixels": tile_gt,
+                         "pred_pixels": tile_pred, "pred_hit": tile_pred_hit, "gt_hit": tile_gt_hit,
+                         "pixels": int(gt.size)})
     tol_precision, tol_recall = ratio(pred_hit, n_pred), ratio(gt_hit, n_gt)
     result.update({f"tol_f1_{tolerance}px": ratio(2 * tol_precision * tol_recall, tol_precision + tol_recall),
                    f"tol_precision_{tolerance}px": tol_precision, f"tol_recall_{tolerance}px": tol_recall,
                    "average_precision": average_precision})
     return {"threshold": threshold_index / 255.0, "threshold_index": threshold_index,
             "threshold_source": "best pooled F1 on this split" if chosen_here else "chosen on val",
-            "n_tiles": len(tiles), "metrics": result}
+            "n_tiles": len(tiles), "metrics": result, **({"per_tile": rows} if per_tile else {})}
 
 
 @torch.no_grad()
@@ -768,9 +774,18 @@ def evaluate(args: argparse.Namespace) -> int:
         raise SystemExit("The checkpoint has no threshold: pass --threshold (chosen on val), or evaluate --split val.")
     loader = eval_loader(splits[args.split], recipe, args.workers if args.workers is not None else default_workers())
     index = None if threshold is None else max(1, min(255, round(threshold * 255)))
-    result = score_split(collect(model, loader, recipe, device), index, recipe.tolerance_px)
+    result = score_split(collect(model, loader, recipe, device), index, recipe.tolerance_px, per_tile=bool(args.per_tile))
     print(f"[{args.split}] threshold {result['threshold']:.3f} ({result['threshold_source']}) | "
           + metrics_line(result["metrics"]))
+    if args.per_tile:   # one row per tile, in loader order: pixel counts at the threshold (pool them per group)
+        names = [loader.dataset.pairs[i][0] for batch in loader.batch_sampler for i in batch]
+        rows = result.pop("per_tile")
+        with open(args.per_tile, "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["name", *rows[0], "iou"])
+            writer.writeheader()
+            for name, row in zip(names, rows):
+                writer.writerow({"name": name, **row, "iou": round(ratio(row["tp"], row["tp"] + row["fp"] + row["fn"]), 6)})
+        print(f"[per tile] {len(rows)} tiles -> {args.per_tile}")
     if args.save:
         Path(args.save).write_text(json.dumps(result, indent=2), encoding="utf-8")
     return 0
@@ -1023,6 +1038,7 @@ def main() -> int:
     p.add_argument("--threshold", type=float, help="default: the one stored in the checkpoint")
     p.add_argument("--workers", type=int)
     p.add_argument("--save", help="write the metrics to this JSON file")
+    p.add_argument("--per-tile", help="also write one row per tile (name, tp, fp, fn, ...) to this CSV")
     p.set_defaults(handler=evaluate)
 
     p = commands.add_parser("ensemble", help="the seeds combined (and flips) vs one model: chosen on val, then test")
