@@ -114,6 +114,17 @@ Val chose seed 0 + flips; on test it gives IoU 0.5745 (F1 0.7297, AP 0.7788) aga
 stays the final model; `predict --ensemble <runs>/ensemble.json` gives the flipped version if the
 small AP gain is wanted.
 
+**Training longer does not pay off either.** The same recipe with 100 epochs instead of 80
+(`EXTRA_ARGS="--epochs 100"`, seeds 0 1 2, 16 Nov split; 2 h 15 min per seed instead of 1 h 50 min):
+
+| Epochs | Val IoU (seeds 0 / 1 / 2) | Val IoU | Test IoU | Best epochs |
+|---|---|---|---|---|
+| 80 (final) | 0.5488 / 0.5409 / 0.5394 | 0.5430 ± 0.0051 | **0.5733 ± 0.0013** | 79 / 76 / 59 |
+| 100 | 0.5449 / 0.5458 / 0.5490 | 0.5465 ± 0.0021 | **0.5734 ± 0.0013** | 88 / 95 / 88 |
+
+Val is a little higher with 100 epochs (+0.0035, worse for seed 0, within the seed spread), and
+test is unchanged (+0.0001), so the 80 epochs of the ablation stay.
+
 The model to use is **seed 0** (best val IoU, 0.5488; best epoch 79, threshold 0.518; test IoU
 0.5739). It was chosen on val, never on test. The weights (`best.pt`, about 56 MB each) are kept
 outside this repository. Test numbers of the two splits are not comparable: they are different
